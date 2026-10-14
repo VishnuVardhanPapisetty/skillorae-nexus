@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --background: #0b1220;
+  --foreground: #f1f5f9;
+  --surface: #101b2d;
+  --surface-raised: #142238;
+  --border: #2a3b52;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #22d3ee;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #fb7185;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-300: #67e8f9;
+  --color-blue-500: #3b82f6;
+  --color-blue-400: #60a5fa;
+  --font-geist-sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-geist-mono: "Cascadia Code", Consolas, monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-white: #f1f5f9;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #a8b6ca;
+  --color-slate-500: #8494aa;
+  --color-slate-600: #64758d;
+  --color-slate-700: #2a3b52;
+  --color-slate-800: #142238;
+  --color-slate-900: #101b2d;
+  --color-slate-950: #0b1220;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #a8b6ca;
+  --color-gray-500: #8494aa;
+  --color-gray-600: #64758d;
+  --color-gray-700: #53657d;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-300: #67e8f9;
+  --color-blue-500: #3b82f6;
+  --color-blue-400: #60a5fa;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-amber-400: #fbbf24;
+  --color-red-300: #fda4af;
+  --color-red-500: #fb7185;
+  --color-rose-500: #fb7185;
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1rem;
+}
+
+[class~="bg-[#030712]"],
+[class~="bg-[#050505]"] {
+  background-color: var(--background);
+}
+
+[class~="bg-[#050816]"] {
+  background-color: var(--surface);
+}
+
+[class~="bg-[#030712]/80"] {
+  background-color: color-mix(in srgb, var(--background) 88%, transparent);
+}
+
+button.bg-cyan-400,
+button.bg-cyan-500 {
+  background-color: var(--accent-blue);
+}
+
+button.bg-cyan-400:hover,
+button.bg-cyan-500:hover {
+  background-color: var(--color-blue-400);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-slate-500);
+  opacity: 1;
+}
+
+:is(button, a, input, select, textarea):focus-visible:not(:disabled) {
+  outline: 2px solid var(--accent-cyan);
+  outline-color: var(--accent-cyan) !important;
+  outline-offset: 2px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans);
+  line-height: 1.5;
+}

@@ -1,0 +1,17 @@
+node_modules/
+**/node_modules/
+**/.next/
+.env*
+!.env.example
+.test-output/
+skillorae/.git-backup/
+**/node_modules/
+**/.next/
+**/.env*
+!**/.env.example
+**/.test-output/
+skillorae/.git-backup/
+skillorae/**/*.backup
+skillorae/**/*.bak
+skillorae/ai/data/
+skillorae/ai/models/

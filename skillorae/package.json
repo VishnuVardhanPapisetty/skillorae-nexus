@@ -1,0 +1,34 @@
+{
+    "name":  "skillorae",
+    "version":  "0.1.0",
+    "private":  true,
+    "scripts":  {
+                    "dev":  "next dev",
+                    "build":  "next build",
+                    "start":  "next start",
+                    "lint":  "eslint",
+                    "test:engines":  "tsc app/lib/career-engine.ts app/lib/recommendation-engine.ts --outDir node_modules/.cache/nexus-test-build --target ES2020 --module commonjs --moduleResolution node --strict --esModuleInterop --skipLibCheck \u0026\u0026 node --test tests/nexus-engines.test.cjs",
+                    "test:routes":  "node --test tests/routes.test.cjs"
+                },
+    "dependencies":  {
+                         "@google/genai":  "^2.28.0",
+                         "@react-three/drei":  "^10.7.9",
+                         "@react-three/fiber":  "^9.8.1",
+                         "@supabase/ssr":  "^0.12.7",
+                         "@supabase/supabase-js":  "^2.117.3",
+                         "next":  "16.4.0",
+                         "react":  "19.3.0",
+                         "react-dom":  "19.3.0",
+                         "three":  "^0.186.1"
+                     },
+    "devDependencies":  {
+                            "@tailwindcss/turbopack":  "^4",
+                            "@types/node":  "^20",
+                            "@types/react":  "^19",
+                            "@types/react-dom":  "^19",
+                            "eslint":  "^9",
+                            "eslint-config-next":  "16.4.0",
+                            "tailwindcss":  "^4",
+                            "typescript":  "^5"
+                        }
+}
