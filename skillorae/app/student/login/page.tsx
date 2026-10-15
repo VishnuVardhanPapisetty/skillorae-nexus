@@ -6,7 +6,11 @@ import { createSupabaseBrowserClient } from "../../lib/supabase";
 
 export default function StudentLoginPage() {
   const router = useRouter();
+
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [fullName, setFullName] = useState("");
+  const [branch, setBranch] = useState("");
+  const [year, setYear] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [acknowledgedDataUse, setAcknowledgedDataUse] = useState(false);
@@ -31,58 +35,97 @@ export default function StudentLoginPage() {
       const supabase = createSupabaseBrowserClient();
 
       if (mode === "signup") {
+        const cleanName = fullName.trim();
+        const cleanBranch = branch.trim();
+        const cleanYear = year.trim();
+        const cleanEmail = email.trim();
+
+        if (
+          cleanName.length < 2 ||
+          cleanName.length > 100 ||
+          cleanBranch.length < 2 ||
+          cleanBranch.length > 80 ||
+          !["1st Year", "2nd Year", "3rd Year", "4th Year"].includes(cleanYear)
+        ) {
+          setError("Please enter a valid name, branch, and academic year.");
+          return;
+        }
+
+        if (password.length < 8) {
+          setError("Password must contain at least 8 characters.");
+          return;
+        }
+
         if (!acknowledgedDataUse) {
           setError("Please confirm how your student information will be used.");
           return;
         }
 
         const { data, error: signupError } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: cleanEmail,
           password,
+          options: {
+            data: {
+              full_name: cleanName,
+              branch: cleanBranch,
+              year: cleanYear,
+            },
+          },
         });
 
         if (signupError) {
           const message = signupError.message.toLowerCase();
+
           setError(
-            message.includes("password")
-              ? "Choose a stronger password with at least 8 characters."
-              : message.includes("already")
-                ? "This address may already have an account. Try signing in instead."
-                : signupError.message,
+            message.includes("rate limit")
+              ? "Too many signup attempts. Please wait before trying again."
+              : message.includes("password")
+                ? "Choose a stronger password with at least 8 characters."
+                : message.includes("already")
+                  ? "This email may already have an account. Try signing in."
+                  : signupError.message,
           );
           return;
         }
 
         if (!data.user) {
           setError(
-            "The account request could not be confirmed. Please try again.",
+            "Account creation could not be confirmed. Please try again.",
           );
           return;
         }
 
-        if (data.session) {
-          const { data: mapping, error: mappingError } = await supabase
-            .from("student_users")
-            .select("student_id")
-            .eq("user_id", data.user.id)
-            .maybeSingle();
+        const { data: mapping, error: mappingError } = await supabase
+          .from("student_users")
+          .select("student_id")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
 
-          if (mappingError || !mapping) {
-            await supabase.auth.signOut();
-            setSuccess(
-              "Your account was created, but it is not linked to a student record yet. Contact your faculty administrator to enable student access.",
-            );
-            return;
-          }
-
-          router.replace("/Dashboard");
-          router.refresh();
+        if (mappingError) {
+          setError(
+            "Your account was created, but we could not verify your student profile. Please try signing in.",
+          );
           return;
         }
 
-        setSuccess(
-          "If this address is eligible, Supabase will send the next account step. If email confirmation is enabled, verify your address. A faculty administrator must link your account to a student record before student tools are available.",
-        );
+        if (!mapping) {
+          setSuccess(
+            "Your account was created, but your student profile is not ready yet. Please try signing in again shortly.",
+          );
+          return;
+        }
+
+        if (!data.session) {
+          setSuccess(
+            "Your account and student profile are ready. Please sign in to continue.",
+          );
+          setMode("login");
+          setPassword("");
+          return;
+        }
+
+        router.replace("/Dashboard");
+        router.refresh();
         return;
       }
 
@@ -93,10 +136,14 @@ export default function StudentLoginPage() {
         });
 
       if (loginError) {
+        const message = loginError.message.toLowerCase();
+
         setError(
-          loginError.message.toLowerCase().includes("invalid login credentials")
+          message.includes("invalid login credentials")
             ? "Email or password is incorrect. Check your details and try again."
-            : loginError.message,
+            : message.includes("email not confirmed")
+              ? "Your email is not confirmed. Please complete the required email verification."
+              : loginError.message,
         );
         return;
       }
@@ -114,7 +161,9 @@ export default function StudentLoginPage() {
 
       if (mappingError || !mapping) {
         await supabase.auth.signOut();
-        setError("Student profile not linked. Please contact your faculty.");
+        setError(
+          "Your student profile could not be found. Please contact support.",
+        );
         return;
       }
 
@@ -140,8 +189,8 @@ export default function StudentLoginPage() {
 
         <p className="mt-2 text-sm text-slate-400">
           {mode === "login"
-            ? "Sign in to access your student intelligence dashboard."
-            : "Create an account to begin student access setup."}
+            ? "Sign in to access your student dashboard."
+            : "Create your account and start your learning journey."}
         </p>
 
         <div
@@ -153,21 +202,88 @@ export default function StudentLoginPage() {
             type="button"
             aria-pressed={mode === "login"}
             onClick={() => switchMode("login")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${mode === "login" ? "bg-cyan-400 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+              mode === "login"
+                ? "bg-cyan-400 text-slate-950"
+                : "text-slate-300 hover:bg-white/5"
+            }`}
           >
             Sign in
           </button>
+
           <button
             type="button"
             aria-pressed={mode === "signup"}
             onClick={() => switchMode("signup")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${mode === "signup" ? "bg-cyan-400 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+              mode === "signup"
+                ? "bg-cyan-400 text-slate-950"
+                : "text-slate-300 hover:bg-white/5"
+            }`}
           >
             Create account
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          {mode === "signup" && (
+            <>
+              <div>
+                <label htmlFor="fullName" className="mb-2 block text-sm">
+                  Full name
+                </label>
+                <input
+                  id="fullName"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="branch" className="mb-2 block text-sm">
+                  Branch
+                </label>
+                <input
+                  id="branch"
+                  type="text"
+                  required
+                  minLength={2}
+                  maxLength={80}
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  placeholder="e.g. CSM, CSE, ECE"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="year" className="mb-2 block text-sm">
+                  Academic year
+                </label>
+                <select
+                  id="year"
+                  required
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
+                >
+                  <option value="">Select your year</option>
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                </select>
+              </div>
+            </>
+          )}
+
           <div>
             <label htmlFor="email" className="mb-2 block text-sm">
               Email address
@@ -191,12 +307,18 @@ export default function StudentLoginPage() {
             <input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={
+                mode === "login" ? "current-password" : "new-password"
+              }
               required
+              minLength={mode === "signup" ? 8 : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              minLength={mode === "signup" ? 8 : undefined}
+              placeholder={
+                mode === "signup"
+                  ? "At least 8 characters"
+                  : "Enter your password"
+              }
               className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-400"
             />
           </div>
@@ -206,20 +328,25 @@ export default function StudentLoginPage() {
               <p className="text-sm font-semibold text-slate-200">
                 Information use
               </p>
+
               <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-slate-400">
                 <li>
-                  Your profile details support personalized career guidance and
-                  learning recommendations.
+                  Your name, branch, and year create your student profile.
                 </li>
                 <li>
-                  Academic information is read from your faculty-linked student
-                  record.
+                  Your profile supports personalized learning and career
+                  recommendations.
                 </li>
                 <li>
-                  Learning progress currently stays in this browser and is not
-                  synced across devices.
+                  Academic records are accessed only through your authorized
+                  student profile.
+                </li>
+                <li>
+                  Learning progress may remain browser-local until server-side
+                  synchronization is implemented.
                 </li>
               </ul>
+
               <label className="flex items-start gap-3 border-t border-white/10 pt-3 text-sm text-slate-300">
                 <input
                   type="checkbox"

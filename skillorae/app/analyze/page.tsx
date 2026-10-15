@@ -20,6 +20,14 @@ const inputClass =
 
 const labelClass = "text-sm text-zinc-400";
 
+type SavedProfile = {
+  cgpa: number | null;
+  interests: string[] | null;
+  strengths: string[] | null;
+  weaknesses: string[] | null;
+  skills: unknown;
+};
+
 export default function AnalyzePage() {
   const router = useRouter();
 
@@ -44,6 +52,7 @@ export default function AnalyzePage() {
   const [error, setError] = useState("");
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileReady, setProfileReady] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState("");
 
   useEffect(() => {
@@ -65,12 +74,12 @@ export default function AnalyzePage() {
           return;
         }
 
-        setUserId(authData.user.id);
+        const authenticatedUserId = authData.user.id;
 
         const { data: mapping, error: mappingError } = await supabase
           .from("student_users")
           .select("student_id")
-          .eq("user_id", authData.user.id)
+          .eq("user_id", authenticatedUserId)
           .maybeSingle();
 
         if (mappingError || !mapping) {
@@ -101,8 +110,19 @@ export default function AnalyzePage() {
           throw new Error("Could not load your academic records.");
         }
 
+        const { data: savedProfile, error: savedProfileError } = await supabase
+          .from("student_profiles")
+          .select("cgpa, interests, strengths, weaknesses, skills")
+          .eq("student_id", mapping.student_id)
+          .maybeSingle();
+
+        if (savedProfileError) {
+          throw new Error("Could not load your saved personal profile.");
+        }
+
         if (cancelled) return;
 
+        setUserId(authenticatedUserId);
         setName(student.full_name);
         setBranch(student.branch);
         setYear(student.year);
@@ -124,6 +144,42 @@ export default function AnalyzePage() {
             ? ""
             : String(academic.assignment_completion_percentage),
         );
+
+        if (savedProfile) {
+          setCgpa(savedProfile.cgpa == null ? "" : String(savedProfile.cgpa));
+
+          setInterests((savedProfile.interests ?? []).join(", "));
+          setStrengths((savedProfile.strengths ?? []).join(", "));
+          setWeaknesses((savedProfile.weaknesses ?? []).join(", "));
+
+          const rawSkills = savedProfile.skills;
+
+          // Current database format: { "Programming": "Intermediate" }
+          if (
+            rawSkills !== null &&
+            typeof rawSkills === "object" &&
+            !Array.isArray(rawSkills)
+          ) {
+            const levels: Record<string, string> = {};
+
+            for (const [skill, level] of Object.entries(rawSkills)) {
+              if (
+                skills.includes(skill) &&
+                typeof level === "string" &&
+                skillLevels.includes(level)
+              ) {
+                levels[skill] = level;
+              }
+            }
+
+            setSelectedSkills(Object.keys(levels));
+            setSkillLevelsByName(levels);
+          } else {
+            // Support older array-shaped skill data without inventing levels.
+            setSelectedSkills([]);
+            setSkillLevelsByName({});
+          }
+        }
 
         setProfileReady(true);
       } catch (err) {
@@ -175,7 +231,9 @@ export default function AnalyzePage() {
     setError("");
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (saving) return;
+
     if (profileLoading) {
       setError("Please wait while your student profile loads.");
       return;
@@ -259,16 +317,72 @@ export default function AnalyzePage() {
       skillLevels: skillLevelsByName,
     };
 
+    setSaving(true);
+    setError("");
+
     try {
+      const supabase = createSupabaseBrowserClient();
+
+      // Verify the current authenticated session.
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
+
+      if (authError || !authData.user || authData.user.id !== userId) {
+        throw new Error(
+          "Your session could not be verified. Please sign in again.",
+        );
+      }
+
+      // Resolve the authenticated user to their own student record.
+      const { data: mapping, error: mappingError } = await supabase
+        .from("student_users")
+        .select("student_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (mappingError || !mapping) {
+        throw new Error("Your student account mapping could not be verified.");
+      }
+
+      const { error: saveError } = await supabase
+        .from("student_profiles")
+        .upsert(
+          {
+            student_id: mapping.student_id,
+            cgpa: cgpaNumber,
+            interests: [interests.trim()],
+            strengths: strengths.trim() ? [strengths.trim()] : [],
+            weaknesses: weaknesses.trim() ? [weaknesses.trim()] : [],
+            skills: Object.fromEntries(
+              selectedSkills.map((skill) => [skill, skillLevelsByName[skill]]),
+            ),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "student_id" },
+        );
+
+      if (saveError) {
+        console.error("Student profile save failed:", saveError);
+        throw new Error(
+          "Could not save your profile to the database. Please try again.",
+        );
+      }
+
+      // Keep the existing local profile format for the Career page.
       localStorage.setItem(
         getStudentStorageKey(userId, "student"),
         JSON.stringify(studentData),
       );
 
-      setError("");
       router.push("/career");
-    } catch {
-      setError("Could not save your profile. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not save your profile. Please try again.",
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -356,11 +470,10 @@ export default function AnalyzePage() {
                 }}
                 placeholder="e.g. 7.5"
                 className={inputClass}
-                disabled={profileLoading || !profileReady}
+                disabled={profileLoading || !profileReady || saving}
               />
               <p className="mt-2 text-xs text-zinc-500">
-                Enter your CGPA. It is not stored in the current database
-                schema.
+                Your CGPA is saved to your student profile.
               </p>
             </div>
           </div>
@@ -438,11 +551,12 @@ export default function AnalyzePage() {
                   key={skill}
                   type="button"
                   onClick={() => toggleSkill(skill)}
+                  disabled={saving}
                   className={`rounded-full border px-4 py-3 text-sm transition ${
                     isSelected
                       ? "border-cyan-400 bg-cyan-400/10 text-cyan-300"
                       : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/30"
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {isSelected ? "✓ " : "+ "}
                   {skill}
@@ -465,11 +579,12 @@ export default function AnalyzePage() {
                         key={level}
                         type="button"
                         onClick={() => setSkillLevel(skill, level)}
+                        disabled={saving}
                         className={`rounded-full border px-3 py-2 text-sm transition ${
                           skillLevelsByName[skill] === level
                             ? "border-cyan-400 bg-cyan-400/10 text-cyan-300"
                             : "border-white/10 text-zinc-400 hover:border-white/30"
-                        }`}
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
                       >
                         {level}
                       </button>
@@ -501,6 +616,7 @@ export default function AnalyzePage() {
                 placeholder="e.g. AI, personal AI assistants, software development..."
                 rows={3}
                 className={inputClass}
+                disabled={saving}
               />
             </div>
 
@@ -515,6 +631,7 @@ export default function AnalyzePage() {
                 placeholder="What are you good at?"
                 rows={2}
                 className={inputClass}
+                disabled={saving}
               />
             </div>
 
@@ -531,6 +648,7 @@ export default function AnalyzePage() {
                 placeholder="What would you like to improve?"
                 rows={2}
                 className={inputClass}
+                disabled={saving}
               />
             </div>
           </div>
@@ -548,15 +666,18 @@ export default function AnalyzePage() {
             <p className="text-xs text-zinc-500">
               Academic values come from your verified student record.
             </p>
+
             <button
               type="button"
               onClick={handleContinue}
-              disabled={profileLoading || !profileReady}
+              disabled={profileLoading || !profileReady || saving}
               className="rounded-2xl bg-cyan-400 px-7 py-4 font-semibold text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {profileLoading
                 ? "Loading profile..."
-                : "Continue to Career Analysis →"}
+                : saving
+                  ? "Saving profile..."
+                  : "Continue to Career Analysis →"}
             </button>
           </div>
         </section>
